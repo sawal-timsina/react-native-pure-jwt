@@ -44,116 +44,6 @@ public class RNPureJwtModule extends ReactContextBaseJavaModule {
         return Base64.encodeToString(plainString.getBytes(Charset.forName("UTF-8")), Base64.DEFAULT);
     }
 
-    private String base64toString(String plainString) {
-        return new String(Base64.decode(plainString, Base64.DEFAULT));
-    }
-
-    private void getResponse(String token, Promise callback) {
-        ObjectMapper mapper = new ObjectMapper();
-        WritableMap response = Arguments.createMap();
-
-        String[] parts = token.split(Pattern.quote("."));
-
-        try {
-            Map<String, Object> headers = mapper.readValue(
-                    this.base64toString(parts[0]),
-                    new TypeReference<Map<String, Object>>() {}
-            );
-
-            response.putMap("headers", Arguments.makeNativeMap(headers));
-        } catch(IOException e) {
-            callback.reject("7", "Invalid header");
-        }
-
-        try {
-            Map<String, Object> payload = mapper.readValue(
-                    this.base64toString(parts[1]),
-                    new TypeReference<Map<String, Object>>() {}
-            );
-
-            response.putMap("payload", Arguments.makeNativeMap(payload));
-        } catch(IOException e) {
-            callback.reject("8", "Invalid payload");
-        }
-
-
-        callback.resolve(response);
-    }
-
-    private void getResponse(Jwt parsed, Promise callback) {
-        ObjectMapper mapper = new ObjectMapper();
-
-        Map<String, Object> headersMap = mapper.convertValue(parsed.getHeader(), DefaultClaims.class);
-        Map<String, Object> payload = mapper.convertValue(parsed.getBody(), DefaultClaims.class);
-
-        WritableMap response = Arguments.createMap();
-
-        response.putMap("headers", Arguments.makeNativeMap(headersMap));
-        response.putMap("payload", Arguments.makeNativeMap(payload));
-
-        callback.resolve(response);
-    }
-
-    @ReactMethod
-    public void decode(String token, String secret, ReadableMap options, Promise callback) {
-        JwtParser parser = Jwts.parser().setSigningKey(this.toBase64(secret));
-
-        Boolean skipValidation = false;
-
-        Set<Map.Entry<String, Object>> entries = options.toHashMap().entrySet();
-
-        for (Object entry: entries) {
-            Map.Entry item = (Map.Entry) entry;
-
-            String key = (String) item.getKey();
-            Object value = item.getValue();
-
-            switch(key) {
-                case "skipValidation":
-                    skipValidation = (boolean) value;
-                    break;
-            }
-        }
-
-        Jwt parsed;
-
-        try {
-            parsed = parser.parse(token);
-        } catch(MalformedJwtException e) {
-            if(skipValidation) {
-                this.getResponse(token, callback);
-                return;
-            }
-
-            callback.reject("2", "The JWT is invalid.");
-
-            return;
-        } catch(ExpiredJwtException e) {
-            if(skipValidation) {
-                this.getResponse(token, callback);
-                return;
-            }
-
-            callback.reject("3", "The JWT is expired.");
-            return;
-        } catch(SignatureException e) {
-            if(skipValidation) {
-                this.getResponse(token, callback);
-                return;
-            }
-
-            callback.reject("6", "Invalid signature.");
-
-            return;
-        } catch(Exception e) {
-            callback.reject("0", e);
-
-            return;
-        }
-
-        this.getResponse(parsed, callback);
-    }
-
     @ReactMethod
     public void sign(ReadableMap claims, String secret, ReadableMap options, Promise callback) {
         String algorithm = options.hasKey("alg") ? options.getString("alg") : "HS256";
@@ -206,7 +96,7 @@ public class RNPureJwtModule extends ReactContextBaseJavaModule {
                 case "jti":
                     constructedToken.setId(value.toString());
                     break;
-                    
+
                 default:
                     constructedToken.claim(key, value);
             }
